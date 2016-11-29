@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title></title>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+	<!-- styles -->
+	<link href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet">
+	<link href="//cdn.datatables.net/1.10.12/css/dataTables.bootstrap.min.css" rel="stylesheet">
+	<link href="//cdn.datatables.net/responsive/2.1.0/css/responsive.bootstrap.min.css" rel="stylesheet">
+	<style> 
+		body {font-size: 17px;}
+		body, h1, .wrapper {padding-top: 40px;clear: both;}
+		.nav {
+		  position: relative;
+		  display: block;
+		  padding: 16px 0 0 0; }
+		 	.nav:after {
+			  position: absolute;
+			  content: "";
+			  width: 100%;
+			  bottom: 0;
+			  left: 0;
+			  border-bottom: 4px solid #eaeaea;
+			  z-index: -1;
+			}
+			@media (max-width: 991px){
+				.nav:after{bottom: -40px;}
+			}
+		  .nav ul.tabs {
+		    padding: 0;
+		    display: inline; }
+		    .nav ul.tabs li {
+		      display: inline-block;
+		      list-style: none;
+		      float: left; }
+		      .nav ul.tabs li a {
+		        display: inline-block;
+		        text-decoration: none;
+		        color: #ccc;
+		        padding: 0 15px 12px 15px;
+		        border-bottom: 4px solid #eaeaea; 
+		        z-index: 2;}
+		        .nav ul.tabs li a.active, .nav ul.tabs li a:hover {
+		          border-bottom: 4px solid #61bb82;
+		          font-weight: bold;
+		          color: #575757; }
+		  .content{display: none;}
+		  .content.active{display: block;}
+		  .dataTables_paginate a {
+		    border: 1px solid #ccc;
+		    padding: 6px;
+		    margin: 9px;
+		    color: #222;
+		    text-decoration: none;
+		    cursor: pointer;
+			}
+	</style>
+
+	<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css">
+
+	<!-- scripts -->
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.2.4/jquery.min.js"></script>
+	<script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+	<script src="//cdn.datatables.net/1.10.7/js/jquery.dataTables.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.2/lodash.min.js"></script>
+
+</head>
+<body>
+
+<div class="container">
+	<a href="#" id="back-link" class="btn btn-default btn-sm pull-left">Go Back</a>
+</div>
+
+<div class="container">
+	<div class="row">
+		<div class="col-md-8 col-md-offset-2 text-center">
+			<h1 id="title"></h1>
+			<p id="description"></p>
+			
+		</div>
+		<div class="col-md-12 nav">
+      <ul class="tabs">
+        <li><a href="#totals" class="active">Artwork Totals</a></li>
+        <li><a href="#months">Month's Top Seller</a></li>
+        <li><a href="#all">All Entries</a></li>
+      </ul>
+    </div>
+    <div class="wrapper">
+    	<div class="col-md-12 content active" id="totals">
+				<table id="totalQtyDataTable" class="table table-hover"></table>
+			</div>
+			<div class="col-md-12 content active" id="months">
+				<table id="monthsQtyDataTable" class="table table-hover"></table>
+			</div>
+			<div class="col-md-12 content active" id="all">
+				<table id="excelDataTable" class="table table-hover"></table>
+			</div>
+    </div>
+	</div>
+</div> <!-- /container -->
+<script>
+////
+// variables to edit ***
+////
+var file = "./json-sales.json",
+		title = "Artwork Quantity Sold",
+		description = "Search and sort by date, artwork or quantity.",
+		backLink = "#",
+		backLinkTxt = '<i class="fa fa-chevron-left"></i>&nbsp; Back to eCommerce Admin';
+
+// update page with content from variables
+$('title').text(title);
+$('#title').text(title);
+$('#description').text(description);
+$('a#back-link').attr('href', backLink).html(backLinkTxt);
+
+// variables for file
+var myList = [],
+		artworkTotals = [],
+		mostSoldArtworkByMonth = [];
+
+////
+// AJAX for json file
+////
+$.getJSON( file, function( data ) {
+  myList = data;
+
+  ////
+  // total quantity table
+  ////
+  artworkTotals = calcArtworkTotals(myList);
+  buildHtmlTable('#totalQtyDataTable', artworkTotals);
+  $("#totalQtyDataTable").DataTable({
+		paging: true,
+		"order": [[ 1, "desc" ]]
+	});
+
+	////
+  // months quantity table
+  ////
+  mostSoldArtworkByMonth = calcMonthlyArtworkTotals(myList);
+  console.log(mostSoldArtworkByMonth)
+  buildHtmlTable('#monthsQtyDataTable', mostSoldArtworkByMonth);
+  $("#monthsQtyDataTable").DataTable({
+		paging: true
+	});
+
+  ////
+  // full entry table
+  ////
+  buildHtmlTable('#excelDataTable', myList);
+  $("#excelDataTable").DataTable({
+		paging: true,
+		"order": [[ 0, "desc" ]]
+	});
+});
+
+function calcArtworkTotals(data) {
+	var artowrkList = collectArtworkList(data);
+	var uniqueList = createUniqueArtworkList(artowrkList);
+
+	for (var a = 0; a < uniqueList.length; a++) {
+		for (var b = 0; b < data.length; b++) {
+			if(uniqueList[a].artwork === data[b].artwork){
+				uniqueList[a].total += data[b].quantity;
+			}	
+		}
+	}
+	return uniqueList; // object array
+}
+
+function calcMonthlyArtworkTotals(data) {
+	var monthlyArtworkSold = [],
+			topMonthlyArtworkSold = [],
+			uniqueMonthArtworkList;
+
+	// group by date
+	var groupedByMonth = _.groupBy(data, function(item) {
+    return item.date.substring(0,7);
+	});
+
+	// loop through grouped months
+	var i = 0;
+	for(var month in groupedByMonth) {
+
+    if (groupedByMonth.hasOwnProperty(month)) {
+    	var monthArtSold = [];
+
+    	// collection of array of artwork
+    	var list = [];
+			// var jsonData = JSON.parse(data);
+			for (var i = 0; i < groupedByMonth[month].length; i++) {
+			    var artwork = groupedByMonth[month][i].artwork;
+			    list.push(artwork);
+			}
+
+			// make unique list of artwork sold this month
+			var u = {}, a = [];
+		  for(var i = 0, l = list.length; i < l; ++i){
+		    if(!u.hasOwnProperty(list[i])) {
+		      var obj = {"artwork": list[i], "total": 0};
+		      a.push(obj);
+		      u[list[i]] = 1;
+		    }
+		  }
+		  uniqueMonthArtworkList = a;
+
+		  // add up totals of this month
+		  for (var a = 0; a < uniqueMonthArtworkList.length; a++) {
+				for (var b = 0; b < groupedByMonth[month].length; b++) {
+					if(uniqueMonthArtworkList[a].artwork === groupedByMonth[month][b].artwork){
+						uniqueMonthArtworkList[a].total += groupedByMonth[month][b].quantity;
+					}	
+				}
+			}
+
+			// find highest sold artwork
+			var highest = Number.NEGATIVE_INFINITY,
+					tmp,
+					highestArtwork;
+
+			for (var i=uniqueMonthArtworkList.length-1; i>=0; i--) {
+			    tmp = uniqueMonthArtworkList[i].total;
+			    if (tmp > highest) {
+			    	highest = tmp;
+			    	highestArtwork = uniqueMonthArtworkList[i].artwork;
+			    }
+			    
+			}
+			// replace all artworks with the highest sold this month
+			topMonthlyArtworkSold.push({"month": month, "artwork": highestArtwork, "total": highest});
+    }
+    i++;
+	}
+
+	return topMonthlyArtworkSold; // object array
+}
+
+function collectArtworkList(data) {
+	var list = [];
+	// var jsonData = JSON.parse(data);
+	for (var i = 0; i < data.length; i++) {
+	    var artwork = data[i].artwork;
+	    list.push(artwork);
+	}
+	return list; // array
+}
+
+function createUniqueArtworkList(arr) {
+	var u = {}, a = [];
+  for(var i = 0, l = arr.length; i < l; ++i){
+    if(!u.hasOwnProperty(arr[i])) {
+      var obj = {"artwork": arr[i], "total": 0};
+      a.push(obj);
+      u[arr[i]] = 1;
+    }
+  }
+  return a; // object array
+}
+
+/////
+// show data
+/////
+// Builds the HTML Table out of myList.
+function buildHtmlTable(selector, data) {
+	var columns = addAllColumnHeaders(data, selector);
+
+	for (var i = 0 ; i < data.length ; i++) {
+		var row$ = $('<tr/>');
+		for (var colIndex = 0 ; colIndex < columns.length ; colIndex++) {
+			var cellValue = data[i][columns[colIndex]];
+
+			if (cellValue == null) { cellValue = ""; }
+
+			row$.append($('<td/>').html(cellValue));
+		}
+		$(selector).append(row$);
+	}
+}
+
+// Adds a header row to the table and returns the set of columns.
+// Need to do union of keys from all records as some records may not contain
+// all records
+function addAllColumnHeaders(data, selector){
+  var columnSet = [];
+  var headerThead$ = $('<thead />');
+  var headerTr$ = $('<tr />');
+
+  for (var i = 0 ; i < data.length ; i++) {
+      var rowHash = data[i];
+      for (var key in rowHash) {
+          if ($.inArray(key, columnSet) == -1){
+              columnSet.push(key);
+              headerTr$.append($('<th/>').html(key));
+          }
+      }
+  }
+  headerThead$.append(headerTr$);
+  $(selector).append(headerThead$);
+
+  return columnSet;
+}
+
+$( document ).ready(function() {
+	//////
+	// tabs nav logic
+	//////
+	$("ul.tabs li").click(function(e){
+		e.preventDefault();
+		if(!$("a", this).hasClass("active")){
+			nthContent = $(this).index();
+			nthContent += 1;
+      // remove active class from tabs and content
+      $("ul.tabs li a.active, .content.active").removeClass("active");
+      // add active class to tab and content
+      $("a", this).addClass("active");
+      $(".content:nth-of-type("+nthContent+")").addClass("active");
+    }
+  });
+
+	//////
+	// ready to hide non-active content in tab cells
+	//////
+	var checkExist = setInterval(function() {
+		if ($("#totalQtyDataTable.dataTable").length && 
+				$("#monthsQtyDataTable.dataTable").length && 
+				$("#excelDataTable.dataTable").length) {
+		  $(".content.active").removeClass("active");
+			$(".content:nth-of-type(1)").addClass("active");
+			console.log('tabs are ready')
+		  clearInterval(checkExist);
+		} else {console.log('not yet')}
+	}, 100); // check every 100ms
+
+});
+
+</script>
+</body>
+</html>
